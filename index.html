@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>조선시대 발명품을 찾아라</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 기본 폰트 및 배경 설정 */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        /* 퍼즐 영역 그리드 설정 */
+        #puzzle-container {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(4, 1fr);
+            width: 400px;
+            height: 400px;
+            border: 4px solid #3b82f6; /* Tailwind blue-500 */
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+            background-color: #f3f4f6; /* Tailwind gray-100 */
+        }
+
+        /* 모바일 화면에서 퍼즐 크기 조정 */
+        @media (max-width: 480px) {
+            #puzzle-container {
+                width: 90vw;
+                height: 90vw;
+            }
+        }
+
+        /* 퍼즐 조각 스타일 */
+        .puzzle-tile {
+            width: 100%;
+            height: 100%;
+            background-size: 400% 400%; /* 4x4 그리드이므로 400% */
+            border: 1px solid #d1d5db; /* Tailwind gray-300 */
+            transition: all 0.3s ease-in-out;
+            cursor: pointer;
+            box-sizing: border-box; /* 테두리를 크기에 포함 */
+        }
+
+        /* 퍼즐 조각 호버 효과 */
+        .puzzle-tile:hover {
+            opacity: 0.8;
+            transform: scale(1.05);
+            z-index: 10;
+        }
+
+        /* 승리 메시지 */
+        #win-message {
+            transition: opacity 0.5s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div class="bg-white p-6 md:p-8 rounded-xl shadow-2xl w-full max-w-md">
+        <h1 class="text-3xl font-bold text-center text-blue-600 mb-6">조선시대 발명품을 찾아라</h1>
+        
+        <!-- 퍼즐 게임 영역 --><div id="puzzle-container" class="mx-auto shadow-lg">
+            <!-- 퍼즐 타일이 여기에 동적으로 생성됩니다 --></div>
+
+        <!-- 게임 방법 안내 --><div class="text-center text-gray-600 mt-4 p-4 bg-gray-50 rounded-lg">
+            <p class="font-semibold">게임 방법:</p>
+            <p class="text-sm">바꾸고 싶은 조각 두 개를 차례로 클릭하세요.</p>
+        </div>
+
+        <!-- 게임 컨트롤 버튼 --><div class="flex justify-center mt-6">
+            <button id="shuffle-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105">
+                Shuffle
+            </button>
+        </div>
+
+        <!-- 승리 메시지 (숨겨져 있음) --><div id="win-message" class="hidden opacity-0 bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mt-6 rounded-lg shadow">
+            <p class="font-bold">축하합니다!</p>
+            <p>퍼즐을 완성했습니다!</p>
+        </div>
+    </div>
+
+    <script>
+        // --- 상수 설정 ---
+        const ROWS = 4;
+        const COLS = 4;
+        const TILE_COUNT = ROWS * COLS;
+        // 요청하신 GitHub raw 이미지 URL 사용
+        const IMAGE_URL = 'https://raw.githubusercontent.com/shinyrumi/remains01/36feebf4ee63b86d180d71789ed8dbd1a65bf53d/Gemini_Generated_Image_lv2e1tlv2e1tlv2e.png';
+
+        // --- DOM 요소 ---
+        const puzzleContainer = document.getElementById('puzzle-container');
+        const shuffleButton = document.getElementById('shuffle-button');
+        const winMessage = document.getElementById('win-message');
+
+        // --- 게임 상태 변수 ---
+        let tiles = []; // 타일 객체 배열
+        let selectedTile = null; // 선택된 타일
+        let isShuffling = false; // 셔플 중인지 확인
+
+        // --- 클래스 정의 ---
+        class Tile {
+            constructor(correctIndex, currentIndex) {
+                this.correctIndex = correctIndex; // 정답 위치 (0~15)
+                this.currentIndex = currentIndex; // 현재 위치 (0~15)
+
+                // 타일 DOM 요소 생성
+                this.element = document.createElement('div');
+                this.element.classList.add('puzzle-tile');
+
+                // 타일 클릭 이벤트 리스너 추가
+                this.element.addEventListener('click', () => this.onClick());
+                
+                // 타일 스타일 설정
+                this.setTileStyle();
+                // 타일 위치 설정
+                this.setTilePosition();
+            }
+
+            // 타일의 배경 이미지 및 위치 설정
+            setTileStyle() {
+                this.element.style.backgroundImage = `url(${IMAGE_URL})`;
+                
+                // 정답 위치에 따른 배경 이미지 위치 계산
+                const correctCol = this.correctIndex % COLS;
+                const correctRow = Math.floor(this.correctIndex / COLS);
+                
+                // background-position-x, background-position-y
+                // (100 / (COLS - 1)) * col%
+                const bgX = (100 / (COLS - 1)) * correctCol; 
+                const bgY = (100 / (ROWS - 1)) * correctRow;
+                
+                this.element.style.backgroundPosition = `${bgX}% ${bgY}%`;
+            }
+
+            // 타일의 그리드 위치 설정 (CSS Grid 사용)
+            setTilePosition() {
+                const currentCol = this.currentIndex % COLS;
+                const currentRow = Math.floor(this.currentIndex / COLS);
+                
+                // CSS Grid는 1부터 시작
+                this.element.style.gridColumnStart = currentCol + 1;
+                this.element.style.gridRowStart = currentRow + 1;
+            }
+
+            // 타일 클릭 시 호출되는 함수
+            onClick() {
+                if (isShuffling) return; // 셔플 중에는 클릭 방지
+
+                if (selectedTile === null) {
+                    // 1. 선택된 타일이 없음 -> 이 타일을 선택
+                    selectedTile = this;
+                    this.element.style.outline = '4px solid #3b82f6'; // 선택 표시
+                    this.element.style.zIndex = '20';
+                } else if (selectedTile === this) {
+                    // 2. 이미 선택된 타일을 다시 클릭 -> 선택 해제
+                    selectedTile = null;
+                    this.element.style.outline = 'none';
+                    this.element.style.zIndex = '0';
+                } else {
+                    // 3. 다른 타일 클릭 -> 두 타일 교환
+                    swapTiles(this, selectedTile);
+                    
+                    // 선택 해제
+                    selectedTile.element.style.outline = 'none';
+                    selectedTile.element.style.zIndex = '0';
+                    selectedTile = null;
+
+                    // 승리 조건 확인
+                    checkWin();
+                }
+            }
+        }
+
+        // --- 핵심 게임 로직 ---
+
+        // 게임 초기화
+        function initGame() {
+            puzzleContainer.innerHTML = ''; // 컨테이너 비우기
+            tiles = [];
+            selectedTile = null;
+            hideWinMessage();
+
+            // 0부터 15까지 타일 생성
+            for (let i = 0; i < TILE_COUNT; i++) {
+                const tile = new Tile(i, i); // (정답 위치, 현재 위치)
+                tiles.push(tile);
+                puzzleContainer.appendChild(tile.element);
+            }
+        }
+
+        // 두 타일의 현재 위치(currentIndex)를 교환
+        function swapTiles(tile1, tile2) {
+            // 1. 현재 인덱스(위치) 교환
+            const tempIndex = tile1.currentIndex;
+            tile1.currentIndex = tile2.currentIndex;
+            tile2.currentIndex = tempIndex;
+
+            // 2. DOM에서 타일 위치 업데이트
+            tile1.setTilePosition();
+            tile2.setTilePosition();
+        }
+
+        // 퍼즐 섞기 (Fisher-Yates 알고리즘)
+        async function shuffle() {
+            isShuffling = true;
+            hideWinMessage();
+            
+            // 선택된 타일이 있다면 해제
+            if (selectedTile) {
+                selectedTile.element.style.outline = 'none';
+                selectedTile.element.style.zIndex = '0';
+                selectedTile = null;
+            }
+
+            // 0부터 15까지의 인덱스 배열 생성
+            let indices = Array.from({length: TILE_COUNT}, (_, i) => i);
+            
+            // 배열 섞기
+            for (let i = indices.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [indices[i], indices[j]] = [indices[j], indices[i]];
+            }
+
+            // 셔플된 인덱스를 타일에 할당하고 위치 업데이트
+            for (let i = 0; i < TILE_COUNT; i++) {
+                tiles[i].currentIndex = indices[i];
+                tiles[i].setTilePosition();
+            }
+            
+            // 시각적 셔플 효과를 위한 짧은 대기
+            await new Promise(resolve => setTimeout(resolve, 50)); 
+            
+            // 만약 셔플했는데 우연히 완성된 상태라면 다시 셔플
+            if (checkWin(true)) {
+                shuffle(); // 다시 섞기
+                return;
+            }
+
+            isShuffling = false;
+        }
+
+        // 승리 조건 확인
+        function checkWin(returnOnly = false) {
+            // 모든 타일이 '정답 위치'와 '현재 위치'가 일치하는지 확인
+            const isWin = tiles.every(tile => tile.correctIndex === tile.currentIndex);
+
+            if (isWin && !returnOnly) {
+                showWinMessage();
+            }
+            return isWin; // 셔플 시 확인용으로 값 반환
+        }
+
+        // 승리 메시지 표시
+        function showWinMessage() {
+            winMessage.classList.remove('hidden');
+            setTimeout(() => {
+                winMessage.classList.remove('opacity-0');
+            }, 10); // 렌더링 후 opacity 변경
+        }
+
+        // 승리 메시지 숨기기
+        function hideWinMessage() {
+            winMessage.classList.add('opacity-0');
+            setTimeout(() => {
+                winMessage.classList.add('hidden');
+            }, 500); // transition 시간 후 hidden
+        }
+
+        // --- 이벤트 리스너 연결 ---
+        shuffleButton.addEventListener('click', shuffle);
+
+        // --- 게임 시작 ---
+        // 이미지 미리 로드 (로딩 시간 확보)
+        const img = new Image();
+        img.onload = () => {
+            // 이미지 로드 완료 후 게임 초기화 및 셔플
+            initGame();
+            setTimeout(shuffle, 100); // 잠시 후 셔플 시작
+        };
+        img.onerror = () => {
+            // 이미지 로드 실패 시
+            puzzleContainer.innerHTML = '<p class="text-red-500 text-center col-span-4">이미지를 불러오는 데 실패했습니다. GitHub 링크를 확인해 주세요.</p>';
+        };
+        img.src = IMAGE_URL;
+
+    </script>
+</body>
+</html>
